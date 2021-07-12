@@ -42,6 +42,12 @@ pub fn compress_file(in_file: &path::Path, out_file: &path::Path) -> Result<(), 
         output.push(new_byte);
         buffer.clear();
     }
+    if buffer.len() > 0 {
+        let code = dictionary.get(&buffer[..]).unwrap(); // Earlier checks make this impossible to be 'None'.
+        for byte in code.to_be_bytes() {
+            output.push(byte);
+        }
+    }
 
     fs::write(out_file, &output[..])?;
 
