@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 pub enum CompressError {
     IoError(io::Error),
+    InternalError(&'static str)
 }
 
 impl From<io::Error> for CompressError {
@@ -13,7 +14,9 @@ impl From<io::Error> for CompressError {
     }
 }
 
-pub fn compress_file(in_file: &path::Path, out_file: &path::Path) -> Result<(), CompressError> {
+
+// FIXME: Deal with dictionary overflow
+pub fn compress_file(in_file: &path::Path, out_file: &path::Path, code_size: usize) -> Result<(), CompressError> {
 
     let mut buffer = vec![];
     let mut output = vec![];
@@ -28,23 +31,18 @@ pub fn compress_file(in_file: &path::Path, out_file: &path::Path) -> Result<(), 
         if dictionary.contains_key(&Vec::from(&buffer[..])) {
             continue;
         }
-        dictionary.insert(Vec::from(&buffer[..]), (dictionary.len()+256) as u32);
+        add_string_to_dictionary(Vec::from(&buffer[..]), &mut dictionary, code_size)?;
 
         let new_byte = buffer.pop().unwrap(); // Earlier checks make this impossible to be 'None'.
-        let old_code = if buffer.len() == 1 {
-                buffer.pop().unwrap() as u32
-            } else {
-                dictionary.get(&buffer[..]).unwrap().clone()
-            };
-        for byte in old_code.to_be_bytes() {
+        for byte in get_code_from_dictionary(&buffer, &dictionary, code_size)? {
             output.push(byte);
         }
         output.push(new_byte);
         buffer.clear();
     }
+
     if buffer.len() > 0 {
-        let code = dictionary.get(&buffer[..]).unwrap(); // Earlier checks make this impossible to be 'None'.
-        for byte in code.to_be_bytes() {
+        for byte in get_code_from_dictionary(&buffer, &dictionary, code_size)? {
             output.push(byte);
         }
     }
@@ -52,6 +50,52 @@ pub fn compress_file(in_file: &path::Path, out_file: &path::Path) -> Result<(), 
     fs::write(out_file, &output[..])?;
 
     Ok(())
+}
+
+fn add_string_to_dictionary(string: Vec<u8>, dictionary: &mut HashMap<Vec<u8>, Vec<u8>>, code_size: usize) -> Result<(), CompressError> {
+    let next_code = dictionary.len() + 256;
+    let next_code = code_to_bytes(next_code, code_size)?;
+    dictionary.insert(string, next_code);
+    Ok(())
+}
+
+fn get_code_from_dictionary(string: &Vec<u8>, dictionary: &HashMap<Vec<u8>, Vec<u8>>, code_size: usize) -> Result<Vec<u8>, CompressError> {
+    match string.len() {
+        0 => {
+            return Err(CompressError::InternalError("Cannot query dictionary with zero length string"));
+        }
+        1 => {
+            let mut res = vec![0; code_size];
+            res[code_size-1] = string[0];
+            return Ok(res);
+        }
+        _ => {
+            match dictionary.get(string) {
+                Some(code) => Ok(code.clone()),
+                None => Err(CompressError::InternalError("No code available for string"))
+            }
+        }
+    }
+}
+
+fn code_to_bytes(code: usize, width: usize) -> Result<Vec<u8>, CompressError> {
+
+    let mut res = vec![];
+    let mut code = code;
+
+    while code > 0 {
+        let next_byte = (code & 0xFF) as u8;
+        res.push(next_byte);
+        code = code >> 8;
+    }
+    if res.len() > width {
+        return Err(CompressError::InternalError("Code is larger than allowed width"));
+    }
+    while res.len() < width {
+        res.push(0);
+    }
+
+    Ok(res)
 }
 
 
