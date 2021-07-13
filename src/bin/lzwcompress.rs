@@ -1,7 +1,7 @@
 use std::env;
 use std::process;
 use std::path::Path;
-use lzw::{self, CompressError};
+use lzw::{self, CompressError, CodeSize};
 
 struct Config {
     file_name: String,
@@ -17,7 +17,7 @@ pub fn main() {
         }
     };
 
-    let compress_result = lzw::compress_file(Path::new(&config.file_name), Path::new(&config.output_file), 2);
+    let compress_result = lzw::compress_file(Path::new(&config.file_name), Path::new(&config.output_file), CodeSize::new(2).unwrap());
     if let Err(err) = compress_result {
         match err {
             CompressError::IoError(io_error) => {
