@@ -14,6 +14,12 @@ impl From<io::Error> for CompressError {
     }
 }
 
+impl From<&'static str> for CompressError {
+    fn from(msg: &'static str) -> CompressError {
+        CompressError::InternalError(msg)
+    }
+}
+
 
 // FIXME: Deal with dictionary overflow
 pub fn compress_file(in_file: &path::Path, out_file: &path::Path, code_size: usize) -> Result<(), CompressError> {
@@ -25,16 +31,17 @@ pub fn compress_file(in_file: &path::Path, out_file: &path::Path, code_size: usi
 
     for byte in fs::read(&in_file)? {
         buffer.push(byte);
-        if buffer.len() == 1 { // All single-byte sequences are assumed to be in the dictionary
+
+        if get_code_from_dictionary(&buffer, &dictionary, code_size).is_some() {
             continue;
         }
-        if dictionary.contains_key(&Vec::from(&buffer[..])) {
-            continue;
-        }
+
         add_string_to_dictionary(Vec::from(&buffer[..]), &mut dictionary, code_size)?;
 
         let new_byte = buffer.pop().unwrap(); // Earlier checks make this impossible to be 'None'.
-        for byte in get_code_from_dictionary(&buffer, &dictionary, code_size)? {
+        
+        let code = get_code_from_dictionary(&buffer, &dictionary, code_size).ok_or("Failed to retreive code from dictionary")?;
+        for byte in code {
             output.push(byte);
         }
         output.push(new_byte);
@@ -42,7 +49,8 @@ pub fn compress_file(in_file: &path::Path, out_file: &path::Path, code_size: usi
     }
 
     if buffer.len() > 0 {
-        for byte in get_code_from_dictionary(&buffer, &dictionary, code_size)? {
+        let code = get_code_from_dictionary(&buffer, &dictionary, code_size).ok_or("Failed to retreive code from dictionary")?;
+        for byte in code {
             output.push(byte);
         }
     }
@@ -59,20 +67,20 @@ fn add_string_to_dictionary(string: Vec<u8>, dictionary: &mut HashMap<Vec<u8>, V
     Ok(())
 }
 
-fn get_code_from_dictionary(string: &Vec<u8>, dictionary: &HashMap<Vec<u8>, Vec<u8>>, code_size: usize) -> Result<Vec<u8>, CompressError> {
+fn get_code_from_dictionary(string: &Vec<u8>, dictionary: &HashMap<Vec<u8>, Vec<u8>>, code_size: usize) -> Option<Vec<u8>> {
     match string.len() {
         0 => {
-            return Err(CompressError::InternalError("Cannot query dictionary with zero length string"));
+            None
         }
         1 => {
             let mut res = vec![0; code_size];
-            res[code_size-1] = string[0];
-            return Ok(res);
+            res[0] = string[0];
+            return Some(res);
         }
         _ => {
             match dictionary.get(string) {
-                Some(code) => Ok(code.clone()),
-                None => Err(CompressError::InternalError("No code available for string"))
+                Some(code) => Some(code.clone()),
+                None => None
             }
         }
     }
