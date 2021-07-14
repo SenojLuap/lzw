@@ -73,11 +73,9 @@ pub fn compress_file(in_file: &path::Path, out_file: &path::Path, code_size: Cod
         if !dictionary_locked {
             will_lock_dictionary = add_string_to_dictionary(Vec::from(&buffer[..]), &mut dictionary, &code_size)?;
         }
+
         let new_byte = buffer.pop().unwrap(); // Earlier checks make this impossible to be 'None'.
-        let code = get_code_from_dictionary(&buffer, &dictionary, &code_size).ok_or("Failed to retreive code from dictionary")?;
-        for byte in code {
-            output.push(byte);
-        }
+        push_code_from_dictionary(&buffer, &dictionary, &code_size, &mut output)?;
 
         if dictionary_locked {
             buffer.clear();
@@ -91,14 +89,19 @@ pub fn compress_file(in_file: &path::Path, out_file: &path::Path, code_size: Cod
     }
 
     if buffer.len() > 0 {
-        let code = get_code_from_dictionary(&buffer, &dictionary, &code_size).ok_or("Failed to retreive code from dictionary")?;
-        for byte in code {
-            output.push(byte);
-        }
+        push_code_from_dictionary(&buffer, &dictionary, &code_size, &mut output)?;
     }
 
     fs::write(out_file, &output[..])?;
 
+    Ok(())
+}
+
+fn push_code_from_dictionary(string: &Vec<u8>, dictionary: &HashMap<Vec<u8>, Vec<u8>>, code_size: &CodeSize, output: &mut Vec<u8>) -> Result<(), &'static str> {
+    let code = get_code_from_dictionary(string, dictionary, code_size).ok_or("Failed to retreive code from dictionary")?;
+    for byte in code {
+        output.push(byte);
+    }
     Ok(())
 }
 
