@@ -1,7 +1,7 @@
 use std::env;
 use std::process;
 use std::path::Path;
-use lzw::{self, CompressError, CodeSize};
+use lzw::{self, errors::CompressError, CodeSize};
 
 struct Config {
     file_name: String,
