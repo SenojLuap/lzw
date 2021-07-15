@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 pub mod errors;
 
-use errors::{CompressError};
+use errors::{CompressError, DecompressError};
 
 pub enum CodeSize {
     Two,
@@ -85,74 +85,57 @@ pub fn compress_file(in_file: &path::Path, out_file: &path::Path, code_size: Cod
 }
 
 
-pub fn decompress_file(in_file: &path::Path, out_file: &path::Path) -> Result<(), CompressError> {
-    unimplemented!();
-    /*
-    let output = vec![];
-    let in_buffer = fs::read(in_file)?;
-
-    let code_size = match in_buffer.pop() {
-        Some(byte) => byte,
-        None => return Err(CompressError::MissingEmptyFileError)
-    };
+pub fn decompress_file(in_file: &path::Path, out_file: &path::Path) -> Result<(), DecompressError> {
+    
+    let mut input_iter = fs::read(in_file)?.into_iter();
+    
+    let code_size = input_iter.next().ok_or(DecompressError::MissingEmptyFileError)?;
     let code_size = match CodeSize::new(code_size as usize) {
-        Ok(size) => size,
-        Err(_) => return Err(CompressError::CorruptInvalidFileError)
+        Ok(code_size) => code_size,
+        Err(_) => return Err(DecompressError::CorruptInvalidFileError)
     };
+    
+    let mut code_buffer = vec![];
+    let mut dictionary : Vec<_> = (0..256).map(|val| vec![val as u8; 1]).collect();
+    let mut output = vec![];
 
-    let dictionary = HashMap::new();
-    let in_buffer = in_buffer.iter();
-
-    let mut dictionary_locked = false;
-
-    let mut next_code = get_code_from_input(&in_buffer, &code_size)?;
-
-    while next_code.is_some() {
-        if dictionary_locked {
-            let next_string = get_string_from_dictionary(next_code.unwrap(), &dictionary, &code_size);
+    for byte in input_iter {
+        if code_buffer.len() < code_size.size() {
+            code_buffer.push(byte);
+            if code_buffer.len() == code_size.size() {
+                let code = vec_to_code(&code_buffer[..]);
+                let string = dictionary.get(code).ok_or(DecompressError::CorruptInvalidFileError)?;
+                for string_byte in string {
+                    output.push(*string_byte);
+                }
+                if dictionary.len() == code_size.max() {
+                    code_buffer.clear();
+                }
+            }
         } else {
-
+            let code = vec_to_code(&code_buffer[..]);
+            let mut new_string = dictionary.get(code).ok_or(DecompressError::CorruptInvalidFileError)?.clone();
+            new_string.push(byte);
+            dictionary.push(new_string);
+            code_buffer.clear();
         }
     }
+    // TODO: What if the code_buffer isn't empty?
+
+    fs::write(out_file, output)?;
 
     Ok(())
-    */
 }
 
-fn get_string_from_dictionary<'a>(code: Vec<u8>, dictionary: &'a HashMap<Vec<u8>, Vec<u8>>, code_size: &CodeSize) -> Option<&'a Vec<u8>> {
-    unimplemented!()
-    /*
-    if dictionary.contains_key(&code) {
-        return dictionary.get(&code);
+fn vec_to_code(vec: &[u8]) -> usize {
+    let mut result = 0;
+
+    for byte in vec {
+        result = result << 8;
+        result = result | (*byte as usize);
     }
 
-    let mut 
-
-    None*/
-}
-
-
-fn get_code_from_input<'a, T>(input: &'a T, code_size: &CodeSize) -> Result<Option<Vec<u8>>, CompressError> 
-        where T: Iterator<Item = &'a u8> {
-    unimplemented!();
-    /*
-    let result = vec![];
-
-    for i in 0..code_size.size() {
-        let next = match input.next() {
-            Some(next_byte) => next_byte,
-            None => {
-                if result.is_empty() {
-                    return Ok(None);
-                }
-                return Err(CompressError::CorruptInvalidFileError);
-            }
-        };
-        result.push(next.clone());
-    }
-
-    Ok(Some(result))
-    */
+    result
 }
 
 
