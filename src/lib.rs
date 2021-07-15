@@ -55,7 +55,6 @@ pub fn compress_file(in_file: &path::Path, out_file: &path::Path, code_size: Cod
         if get_code_from_dictionary(&buffer, &dictionary).is_some() {
             continue;
         }
-
         let mut will_lock_dictionary = false;
         if !dictionary_locked {
             will_lock_dictionary = add_string_to_dictionary(Vec::from(&buffer[..]), &mut dictionary, &code_size);
@@ -63,7 +62,6 @@ pub fn compress_file(in_file: &path::Path, out_file: &path::Path, code_size: Cod
 
         let new_byte = buffer.pop().unwrap(); // Earlier checks make this impossible to be 'None'.
         push_code_from_dictionary(&buffer, &dictionary, &code_size, &mut output)?;
-
         if dictionary_locked {
             buffer.clear();
             buffer.push(new_byte);
@@ -71,7 +69,6 @@ pub fn compress_file(in_file: &path::Path, out_file: &path::Path, code_size: Cod
             output.push(new_byte);
             buffer.clear();
         }
-
         dictionary_locked = dictionary_locked || will_lock_dictionary;
     }
 
@@ -92,7 +89,7 @@ pub fn decompress_file(in_file: &path::Path, out_file: &path::Path) -> Result<()
     let code_size = input_iter.next().ok_or(DecompressError::MissingEmptyFileError)?;
     let code_size = match CodeSize::new(code_size as usize) {
         Ok(code_size) => code_size,
-        Err(_) => return Err(DecompressError::CorruptInvalidFileError)
+        Err(_) => return Err(DecompressError::CorruptInvalidFileError(1))
     };
     
     let mut code_buffer = vec![];
@@ -104,7 +101,7 @@ pub fn decompress_file(in_file: &path::Path, out_file: &path::Path) -> Result<()
             code_buffer.push(byte);
             if code_buffer.len() == code_size.size() {
                 let code = vec_to_code(&code_buffer[..]);
-                let string = dictionary.get(code).ok_or(DecompressError::CorruptInvalidFileError)?;
+                let string = dictionary.get(code).ok_or(DecompressError::CorruptInvalidFileError(2))?;
                 for string_byte in string {
                     output.push(*string_byte);
                 }
@@ -114,8 +111,9 @@ pub fn decompress_file(in_file: &path::Path, out_file: &path::Path) -> Result<()
             }
         } else {
             let code = vec_to_code(&code_buffer[..]);
-            let mut new_string = dictionary.get(code).ok_or(DecompressError::CorruptInvalidFileError)?.clone();
+            let mut new_string = dictionary.get(code).ok_or(DecompressError::CorruptInvalidFileError(3))?.clone();
             new_string.push(byte);
+            output.push(byte);
             dictionary.push(new_string);
             code_buffer.clear();
         }
@@ -130,9 +128,8 @@ pub fn decompress_file(in_file: &path::Path, out_file: &path::Path) -> Result<()
 fn vec_to_code(vec: &[u8]) -> usize {
     let mut result = 0;
 
-    for byte in vec {
-        result = result << 8;
-        result = result | (*byte as usize);
+    for (idx, byte) in vec.iter().enumerate() {
+        result = result | ((*byte as usize) << (idx * 8));
     }
 
     result

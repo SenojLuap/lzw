@@ -21,7 +21,7 @@ pub enum DecompressError {
     IoError(io::Error),
     InternalError(&'static str),
     MissingEmptyFileError,
-    CorruptInvalidFileError
+    CorruptInvalidFileError(u16)
 }
 
 impl From<io::Error> for DecompressError {

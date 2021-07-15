@@ -17,7 +17,7 @@ pub fn main() {
         }
     };
 
-    let compress_result = lzw::compress_file(Path::new(&config.file_name), Path::new(&config.output_file), CodeSize::new(2).unwrap());
+    let compress_result = lzw::compress_file(Path::new(&config.file_name), Path::new(&config.output_file), CodeSize::new(3).unwrap());
     if let Err(err) = compress_result {
         match err {
             CompressError::IoError(io_error) => {
