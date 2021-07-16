@@ -192,10 +192,4 @@ fn code_to_bytes(code: usize, code_size: &CodeSize) -> Result<Vec<u8>, CompressE
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn it_works() {
-        let left = vec![1, 2, 3];
-        let right = vec![1, 2, 3];
-        assert_eq!(left, right);
-    }
 }
